@@ -1,38 +1,75 @@
 name: Build SPFx SPPKG
+
 on:
   workflow_dispatch:
   push:
     branches: [ main, master ]
+
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      # >>> SET THIS to your SPFx folder. "." means repo root.
+      SPFX_DIR: "react-application-injectcss-master"   # or "react-application-injectcss-master" / "sharepoint-global-css"
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Use Node 16.x   # <— important for old deps like deasync
+      - name: Show tree and where we are
+        run: |
+          echo "PWD=$(pwd)"
+          echo "Repo contents:"
+          ls -la
+          echo "SPFX_DIR=$SPFX_DIR"
+          echo "SPFX_DIR contents:"
+          ls -la "$SPFX_DIR" || true
+
+      # Use Node 16 for older SPFx / deasync; switch to '18' if you're on SPFx 1.18+
+      - name: Use Node 16.x
         uses: actions/setup-node@v4
         with:
           node-version: '16'
           cache: 'npm'
+          cache-dependency-path: ${{ env.SPFX_DIR }}/package-lock.json
 
-      - name: Build prerequisites
+      - name: Install build prerequisites
         run: |
           sudo apt-get update
           sudo apt-get install -y python3 g++ make
           npm config set python python3
 
+      - name: Verify SPFx files exist
+        run: |
+          test -f "$SPFX_DIR/package.json" || (echo "ERROR: No package.json in $SPFX_DIR" && exit 1)
+          test -f "$SPFX_DIR/gulpfile.js" || (echo "ERROR: No gulpfile.js in $SPFX_DIR" && exit 1)
+          test -f "$SPFX_DIR/config/package-solution.json" || (echo "ERROR: No config/package-solution.json in $SPFX_DIR" && exit 1)
+
+      - name: Print SPFx version & Node
+        run: |
+          node -v
+          npm -v
+          cat "$SPFX_DIR/package.json" | head -n 60
+
       - name: Install dependencies
+        working-directory: ${{ env.SPFX_DIR }}
         run: npm ci || npm install
 
       - name: Bundle (production)
+        working-directory: ${{ env.SPFX_DIR }}
         run: npx gulp bundle --ship
 
       - name: Package solution
+        working-directory: ${{ env.SPFX_DIR }}
         run: npx gulp package-solution --ship
 
-      - name: Upload .sppkg
+      - name: List solution output
+        run: |
+          echo "Looking for SPPKG under $SPFX_DIR/sharepoint/solution"
+          ls -la "$SPFX_DIR/sharepoint/solution" || true
+
+      - name: Upload .sppkg artifact
         uses: actions/upload-artifact@v4
         with:
           name: sppkg
-          path: sharepoint/solution/*.sppkg
+          path: ${{ env.SPFX_DIR }}/sharepoint/solution/*.sppkg
