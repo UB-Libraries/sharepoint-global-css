@@ -1,29 +1,22 @@
 name: Build SPFx SPPKG
-
 on:
-  workflow_dispatch:        # run manually from Actions tab
+  workflow_dispatch:
   push:
     branches: [ main, master ]
-
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # If your SPFx project is in a subfolder, set working-directory on steps below, e.g.:
-      #   working-directory: ./sharepoint-global-css
-      # Otherwise leave as-is.
-
-      - name: Use Node 18.x
+      - name: Use Node 16.x   # <— important for old deps like deasync
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: '16'
           cache: 'npm'
 
-      - name: Install build prerequisites
+      - name: Build prerequisites
         run: |
           sudo apt-get update
           sudo apt-get install -y python3 g++ make
@@ -38,7 +31,7 @@ jobs:
       - name: Package solution
         run: npx gulp package-solution --ship
 
-      - name: Upload .sppkg artifact
+      - name: Upload .sppkg
         uses: actions/upload-artifact@v4
         with:
           name: sppkg
